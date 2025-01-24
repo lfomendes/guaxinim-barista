@@ -27,12 +27,12 @@ pip install -r requirements.txt
 cp env.example .env
 
 # Edit .env with your actual values
-nano .env
+vim .env
 ```
 
 4. Run the application:
 ```bash
-streamlit run home.py
+streamlit run main.py
 ```
 
 ## Environment Variables
