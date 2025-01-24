@@ -3,7 +3,7 @@ Unit tests for the CoffeePreparationData class
 """
 
 import unittest
-from coffee_data import CoffeePreparationData
+from guaxinim.core.coffee_data import CoffeePreparationData
 
 
 class TestCoffeePreparationData(unittest.TestCase):

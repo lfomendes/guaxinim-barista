@@ -4,8 +4,9 @@ Unit tests for the GuaxinimBot class
 
 import unittest
 from unittest.mock import patch, MagicMock
-from guaxinim_bot import GuaxinimBot
-from coffee_data import CoffeePreparationData
+
+from guaxinim.core.guaxinim_bot import GuaxinimBot
+from guaxinim.core.coffee_data import CoffeePreparationData
 
 
 class TestGuaxinimBot(unittest.TestCase):
@@ -13,7 +14,7 @@ class TestGuaxinimBot(unittest.TestCase):
 
     def setUp(self):
         """Set up test cases"""
-        with patch('guaxinim_bot.OpenAI') as mock_openai:
+        with patch('guaxinim.core.guaxinim_bot.OpenAI') as mock_openai:
             self.bot = GuaxinimBot()
             self.mock_openai = mock_openai
 
