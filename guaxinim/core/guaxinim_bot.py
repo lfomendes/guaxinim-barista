@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from guaxinim.core.coffee_data import CoffeePreparationData
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 
 class GuaxinimBot:
