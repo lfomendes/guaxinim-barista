@@ -12,13 +12,17 @@ Guaxinim is an AI-powered coffee assistant that helps you brew the perfect cup o
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/guaxinim.git
-cd guaxinim
+git clone https://github.com/lfomendes/guaxinim-barista.git
+cd guaxinim-barista
 ```
 
-2. Install dependencies:
+2. Create and activate a virtual environment:
 ```bash
-pip install -r requirements.txt
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate
 ```
 
 3. Set up environment variables:
@@ -27,10 +31,16 @@ pip install -r requirements.txt
 cp env.example .env
 
 # Edit .env with your actual values
+# Make sure to add your OpenAI API key
 vim .env
 ```
 
-4. Run the application:
+4. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+5. Run the application:
 ```bash
 streamlit run main.py
 ```
