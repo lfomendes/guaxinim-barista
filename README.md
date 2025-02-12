@@ -19,7 +19,7 @@ cd guaxinim-barista
 2. Create and activate a virtual environment:
 ```bash
 # Create virtual environment
-python -m venv venv
+virtualenv venv 
 
 # Activate virtual environment
 source venv/bin/activate
