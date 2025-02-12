@@ -10,6 +10,7 @@ The app provides three main functionalities:
 import streamlit as st
 from guaxinim.core.coffee_data import CoffeePreparationData
 from guaxinim.core.guaxinim_bot import GuaxinimBot
+from guaxinim.ui.similarity_search_page import search_coffee_documents
 
 
 # Initialize the bot
@@ -224,9 +225,15 @@ def learn_about_coffee():
     # Display answer if a question is selected
     if selected_question and selected_question.strip():
         with st.spinner("Getting answer..."):
-            answer = guaxinim_bot.ask_guaxinim(selected_question)
+            response = guaxinim_bot.ask_guaxinim(selected_question)
             st.write("### Answer")
-            st.write(answer)
+            st.write(response.answer)
+            
+            # Display sources if available
+            if response.sources:
+                st.write("### Sources Used")
+                for source in response.sources:
+                    st.markdown(f"- [{source['title']}]({source['source']})")
 
 
 def main():
@@ -255,6 +262,7 @@ def main():
                 "Learn to make perfect coffee",
                 "Improve my current coffee",
                 "Learn about coffee",
+                "Search coffee knowledge",
             ],
         )
 
@@ -262,8 +270,10 @@ def main():
             learn_coffee_making()
         elif option == "Improve my current coffee":
             improve_coffee()
-        else:
+        elif option == "Learn about coffee":
             learn_about_coffee()
+        else:
+            search_coffee_documents()
 
 
 if __name__ == "__main__":

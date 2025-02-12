@@ -7,10 +7,26 @@ recommendations and answers coffee-related questions using OpenAI's API.
 import os
 from openai import OpenAI, APIError, APIConnectionError
 from dotenv import load_dotenv
+from typing import List, Dict
+from dataclasses import dataclass
 from guaxinim.core.coffee_data import CoffeePreparationData
+from src.pdf_processor.similarity_search import DocumentSearcher
+from guaxinim.core.logger import logger
 
 # Load environment variables
 load_dotenv(override=True)
+
+
+@dataclass
+class GuaxinimResponse:
+    """Response from GuaxinimBot containing the answer and its sources"""
+    answer: str
+    sources: List[Dict[str, str]]
+    
+    @classmethod
+    def error(cls, message: str) -> 'GuaxinimResponse':
+        """Create an error response"""
+        return cls(answer=f"Error: {message}", sources=[])
 
 
 class GuaxinimBot:
@@ -37,6 +53,16 @@ class GuaxinimBot:
 
     Format your response in markdown for better readability."""
 
+    CONTEXT_PROMPT_TEMPLATE = """Context information is below.
+    ---------------------
+    {context_str}
+    ---------------------
+    Given the context information and your expertise as a professional barista,
+    provide a 
+     answer to the query.
+    Query: {query_str}
+    Answer: """
+
     def __init__(self):
         """Initialize the GuaxinimBot with API key validation and OpenAI client setup."""
         if not os.getenv("OPENAI_API_KEY"):
@@ -44,6 +70,12 @@ class GuaxinimBot:
                 "OpenAI API key not found. Please set the OPENAI_API_KEY environment variable."
             )
         self.client = OpenAI()
+        try:
+            self.searcher = DocumentSearcher('data/json/hoffman_pdf.json')
+            logger.info("Document searcher initialized successfully")
+        except Exception as e:
+            logger.warning(f"Could not initialize document searcher: {e}")
+            self.searcher = None
 
     def get_coffee_guide(self, method: str) -> str:
         """
@@ -76,41 +108,133 @@ class GuaxinimBot:
         except (APIError, APIConnectionError) as e:
             return f"Error getting coffee guide: {str(e)}"
 
-    def ask_guaxinim(self, query: str) -> str:
+    def _get_relevant_context(self, query: str, k_chunks: int = 5) -> str:
+        """Get relevant context from the document database."""
+        if not self.searcher:
+            logger.warning("Document searcher not available, proceeding without context")
+            return ""
+
+        logger.info("Starting context search")
+        logger.debug(f"Query: {query}")
+        
+        # Get relevant chunks and titles
+        chunks = self.searcher.search_similar_chunks(query, k=k_chunks)
+        titles = self.searcher.search_similar_titles(query, k=2)
+
+        # Log the sources being used
+        logger.info("Found relevant content:")
+        logger.info("Chunks:")
+        for chunk in chunks:
+            logger.info(f"- {chunk['title']} (Score: {chunk['similarity_score']:.3f})")
+
+        logger.info("Titles:")
+        for title in titles:
+            logger.info(f"- {title['title']} (Score: {title['similarity_score']:.3f})")
+
+        # Log detailed chunk content at debug level
+        for i, chunk in enumerate(chunks):
+            logger.debug(f"Chunk {i+1} content:")
+            logger.debug(f"Title: {chunk['title']}")
+            logger.debug(f"Source: {chunk['source']}")
+            logger.debug(f"Content: {chunk['chunk_text'][:200]}...")
+
+        # Format context string
+        context_parts = []
+
+        # Add relevant chunks
+        for chunk in chunks:
+            context_parts.append(
+                f"From '{chunk['title']}':\n"
+                f"{chunk['chunk_text']}\n"
+                f"(Source: {chunk['source']})\n"
+            )
+
+        # Add relevant titles if they're different from chunk sources
+        chunk_sources = {chunk['source'] for chunk in chunks}
+        for title in titles:
+            if title['source'] not in chunk_sources:
+                context_parts.append(
+                    f"Additional relevant article: {title['title']}\n"
+                    f"(Source: {title['source']})\n"
+                )
+
+        return "\n".join(context_parts)
+
+    def ask_guaxinim(self, query: str) -> GuaxinimResponse:
         """
-        Process a coffee-related question and return an AI-generated answer.
+        Process a coffee-related question and return an AI-generated answer along with sources.
 
         Args:
             query (str): The user's coffee-related question
 
         Returns:
-            str: AI-generated response to the query
+            GuaxinimResponse: Object containing the answer and its sources
         """
-
-        basic_prompt = """
-        Check if the following question is coffee-related:
-        If yes: Provide a detailed answer
-        If no: Reply with 'I only answer questions about coffee.'
-
-        Question: """
-        
         try:
+            # Get relevant context
+            logger.debug(f"TESTE Processing query: {query}")
+            sources = []
+            
+            if self.searcher:
+                # Get chunks and titles
+                chunks = self.searcher.search_similar_chunks(query, k=5)
+                titles = self.searcher.search_similar_titles(query, k=2)
+                
+                # Combine chunks and titles into sources list
+                seen_sources = set()
+                for chunk in chunks:
+                    if chunk['source'] not in seen_sources:
+                        sources.append({
+                            'title': chunk['title'],
+                            'source': "".join(chunk['source'].split())
+                        })
+                        seen_sources.add(chunk['source'])
+                
+                for title in titles:
+                    if title['source'] not in seen_sources:
+                        sources.append({
+                            'title': title['title'],
+                            'source': "".join(title['source'].split())
+                        })
+                        seen_sources.add(title['source'])
+                
+                context = self._get_relevant_context(query)
+            else:
+                context = ""
+            
+            # Prepare the prompt with context
+            if context:
+                logger.debug("Using context-based prompt")
+                prompt = self.CONTEXT_PROMPT_TEMPLATE.format(
+                    context_str=context,
+                    query_str=query
+                )
+            else:
+                logger.debug("Using fallback prompt without context")
+                prompt = f"As a professional coffee barista, please answer this question: {query}"
+            
             response = self.client.chat.completions.create(
                 model=self.GPT_MODEL,
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a professional coffee barista expert.",
+                        "content": "You are a professional coffee barista expert. Always cite sources when using information from the provided context.",
                     },
-                    {"role": "user", "content": basic_prompt + query},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=self.TEMPERATURE,
-                max_tokens=500,
+                max_tokens=800,
                 store=True,
             )
-            return response.choices[0].message.content
-        except (APIError, APIConnectionError) as e:
-            return f"Error processing question: {str(e)}"
+            
+            return GuaxinimResponse(
+                answer=response.choices[0].message.content,
+                sources=sources
+            )
+        except Exception as e:
+            error_msg = f"Error processing question: {str(e)}"
+            logger.error(error_msg)
+            return GuaxinimResponse.error(str(e))
 
     def improve_coffee(self, coffee_data: CoffeePreparationData) -> str:
         """

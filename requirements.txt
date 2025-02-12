@@ -5,3 +5,7 @@ flake8
 pylint
 black
 pytest>=7.0.0
+PyPDF2>=3.0.0
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+faiss-cpu>=1.7.4
