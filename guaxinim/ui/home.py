@@ -225,9 +225,16 @@ def learn_about_coffee():
     # Display answer if a question is selected
     if selected_question and selected_question.strip():
         with st.spinner("Getting answer..."):
-            answer = guaxinim_bot.ask_guaxinim(selected_question)
+            response = guaxinim_bot.ask_guaxinim(selected_question)
             st.write("### Answer")
-            st.write(answer)
+            st.write(response.answer)
+            
+            # Display sources if available
+            if response.sources:
+                st.write("### Sources Used")
+                for source in response.sources:
+                    url = "".join(source['source'].split())
+                    st.markdown(f"- [{source['title']}]({url})")
 
 
 def main():

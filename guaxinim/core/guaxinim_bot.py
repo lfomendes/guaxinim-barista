@@ -8,12 +8,25 @@ import os
 from openai import OpenAI, APIError, APIConnectionError
 from dotenv import load_dotenv
 from typing import List, Dict
+from dataclasses import dataclass
 from guaxinim.core.coffee_data import CoffeePreparationData
 from src.pdf_processor.similarity_search import DocumentSearcher
 from guaxinim.core.logger import logger
 
 # Load environment variables
 load_dotenv()
+
+
+@dataclass
+class GuaxinimResponse:
+    """Response from GuaxinimBot containing the answer and its sources"""
+    answer: str
+    sources: List[Dict[str, str]]
+    
+    @classmethod
+    def error(cls, message: str) -> 'GuaxinimResponse':
+        """Create an error response"""
+        return cls(answer=f"Error: {message}", sources=[])
 
 
 class GuaxinimBot:
@@ -147,20 +160,47 @@ class GuaxinimBot:
 
         return "\n".join(context_parts)
 
-    def ask_guaxinim(self, query: str) -> str:
+    def ask_guaxinim(self, query: str) -> GuaxinimResponse:
         """
-        Process a coffee-related question and return an AI-generated answer.
+        Process a coffee-related question and return an AI-generated answer along with sources.
 
         Args:
             query (str): The user's coffee-related question
 
         Returns:
-            str: AI-generated response to the query
+            GuaxinimResponse: Object containing the answer and its sources
         """
         try:
             # Get relevant context
-            logger.debug(f"Processing query: {query}")
-            context = self._get_relevant_context(query)
+            logger.debug(f"TESTE Processing query: {query}")
+            sources = []
+            
+            if self.searcher:
+                # Get chunks and titles
+                chunks = self.searcher.search_similar_chunks(query, k=5)
+                titles = self.searcher.search_similar_titles(query, k=2)
+                
+                # Combine chunks and titles into sources list
+                seen_sources = set()
+                for chunk in chunks:
+                    if chunk['source'] not in seen_sources:
+                        sources.append({
+                            'title': chunk['title'],
+                            'source': chunk['source']
+                        })
+                        seen_sources.add(chunk['source'])
+                
+                for title in titles:
+                    if title['source'] not in seen_sources:
+                        sources.append({
+                            'title': title['title'],
+                            'source': title['source']
+                        })
+                        seen_sources.add(title['source'])
+                
+                context = self._get_relevant_context(query)
+            else:
+                context = ""
             
             # Prepare the prompt with context
             if context:
@@ -186,9 +226,15 @@ class GuaxinimBot:
                 max_tokens=800,
                 store=True,
             )
-            return response.choices[0].message.content
-        except (APIError, APIConnectionError) as e:
-            return f"Error processing question: {str(e)}"
+            
+            return GuaxinimResponse(
+                answer=response.choices[0].message.content,
+                sources=sources
+            )
+        except Exception as e:
+            error_msg = f"Error processing question: {str(e)}"
+            logger.error(error_msg)
+            return GuaxinimResponse.error(str(e))
 
     def improve_coffee(self, coffee_data: CoffeePreparationData) -> str:
         """
