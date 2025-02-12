@@ -89,20 +89,7 @@ class DocumentSearcher:
         # Search in FAISS index
         distances, indices = self.chunk_index.search(query_embedding, k)
         
-        # Collect results
-        results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx != -1:  # Valid index
-                doc_idx, chunk_idx, chunk_text = self.chunk_mapping[idx]
-                doc = self.documents[doc_idx]
-                results.append({
-                    'title': doc['title'],
-                    'source': doc['source'],
-                    'chunk_text': chunk_text,
-                    'similarity_score': 1 - dist/2,  # Convert L2 distance to similarity score
-                })
-        
-        return results
+        return self._collect_search_results(distances[0], indices[0], include_chunk_text=True)
     
     def search_similar_titles(self, query: str, k: int = 5) -> List[Dict]:
         """Search for documents with titles similar to the query.
@@ -121,17 +108,39 @@ class DocumentSearcher:
         # Search in FAISS index
         distances, indices = self.title_index.search(query_embedding, k)
         
-        # Collect results
-        results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx != -1:  # Valid index
-                doc = self.title_mapping[idx]
-                results.append({
-                    'title': doc['title'],
-                    'source': doc['source'],
-                    'similarity_score': 1 - dist/2,  # Convert L2 distance to similarity score
-                })
+        return self._collect_search_results(distances[0], indices[0], include_chunk_text=False)
+
+    def _collect_search_results(self, distances: np.ndarray, indices: np.ndarray, include_chunk_text: bool = False) -> List[Dict]:
+        """Collect search results from FAISS search output.
         
+        Args:
+            distances (np.ndarray): Array of distances from FAISS search
+            indices (np.ndarray): Array of indices from FAISS search
+            include_chunk_text (bool): Whether to include chunk text in results
+            
+        Returns:
+            List[Dict]: List of dictionaries containing search results and metadata
+        """
+        results = []
+        for dist, idx in zip(distances, indices):
+            if idx != -1:  # Valid index
+                if include_chunk_text:
+                    doc_idx, chunk_idx, chunk_text = self.chunk_mapping[idx]
+                    doc = self.documents[doc_idx]
+                    result = {
+                        'title': doc['title'],
+                        'source': "".join(doc['source'].split()),
+                        'chunk_text': chunk_text,
+                        'similarity_score': 1 - dist/2
+                    }
+                else:
+                    doc = self.title_mapping[idx]
+                    result = {
+                        'title': doc['title'],
+                        'source': "".join(doc['source'].split()),
+                        'similarity_score': 1 - dist/2
+                    }
+                results.append(result)
         return results
 
 def main():
