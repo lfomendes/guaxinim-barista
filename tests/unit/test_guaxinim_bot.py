@@ -46,6 +46,7 @@ class TestGuaxinimBot(unittest.TestCase):
         # Create test data
         coffee_data = CoffeePreparationData(
             issue_encountered="Too bitter",
+            brewing_method="V60",
             amount_of_coffee=15.0,
             amount_of_water=250.0
         )
@@ -66,8 +67,9 @@ class TestGuaxinimBot(unittest.TestCase):
         mock_response.choices[0].message.content = "Test answer"
         self.bot.client.chat.completions.create.return_value = mock_response
 
-        answer = self.bot.ask_guaxinim("What is coffee bloom?")
-        self.assertEqual(answer, "Test answer")
+        response = self.bot.ask_guaxinim("What is coffee bloom?")
+        self.assertEqual(response.answer, "Test answer")
+        self.assertIsInstance(response.sources, list)
         self.bot.client.chat.completions.create.assert_called_once()
 
 

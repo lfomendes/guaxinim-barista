@@ -11,7 +11,7 @@ class TestCoffeePreparationData(unittest.TestCase):
 
     def test_create_minimal_coffee_data(self):
         """Test creating CoffeePreparationData with only required fields"""
-        data = CoffeePreparationData(issue_encountered="Too bitter")
+        data = CoffeePreparationData(issue_encountered="Too bitter", brewing_method="V60")
         self.assertEqual(data.issue_encountered, "Too bitter")
         self.assertIsNone(data.amount_of_coffee)
         self.assertIsNone(data.amount_of_water)
@@ -20,6 +20,7 @@ class TestCoffeePreparationData(unittest.TestCase):
         """Test creating CoffeePreparationData with all fields"""
         data = CoffeePreparationData(
             issue_encountered="Too acidic",
+            brewing_method="V60",
             amount_of_coffee=15.0,
             amount_of_water=250.0,
             type_of_bean="Colombian",

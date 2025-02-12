@@ -26,6 +26,7 @@ class CoffeePreparationData:
     """
 
     issue_encountered: str
+    brewing_method: str
     amount_of_coffee: Optional[float] = None
     amount_of_water: Optional[float] = None
     type_of_bean: Optional[str] = None

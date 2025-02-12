@@ -77,7 +77,7 @@ class GuaxinimBot:
             logger.warning(f"Could not initialize document searcher: {e}")
             self.searcher = None
 
-    def get_coffee_guide(self, method: str) -> str:
+    def get_coffee_guide(self, method: str) -> GuaxinimResponse:
         """
         Get a detailed guide for making coffee using the specified method.
 
@@ -85,34 +85,44 @@ class GuaxinimBot:
             method (str): The coffee brewing method (e.g., 'V60', 'French Press')
 
         Returns:
-            str: Detailed brewing guide from OpenAI
+            GuaxinimResponse: Object containing the guide and its sources
         """
         try:
+            # Get relevant context about the brewing method
+            query = f"How to make coffee using {method} method"
+            sources = []
+            context_str = ""
+            
+            if self.searcher:
+                context_str, sources = self._get_relevant_context(query)
+
+            # Create the prompt with context
+            prompt = "You are a professional coffee barista expert.\n\n"
+            if context_str:
+                prompt += f"Here is some relevant information:\n{context_str}\n\n"
+            prompt += self.COFFEE_GUIDE_PROMPT.format(method=method)
+
             response = self.client.chat.completions.create(
                 model=self.GPT_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional coffee barista expert.",
-                    },
-                    {
-                        "role": "user",
-                        "content": self.COFFEE_GUIDE_PROMPT.format(method=method),
-                    },
-                ],
+                messages=[{"role": "system", "content": prompt}],
                 temperature=self.TEMPERATURE,
                 max_tokens=1000,
-                store=True,
             )
-            return response.choices[0].message.content
-        except (APIError, APIConnectionError) as e:
-            return f"Error getting coffee guide: {str(e)}"
 
-    def _get_relevant_context(self, query: str, k_chunks: int = 5) -> str:
+            return GuaxinimResponse(
+                answer=response.choices[0].message.content,
+                sources=sources
+            )
+        except Exception as e:
+            error_msg = f"Error getting coffee guide: {str(e)}"
+            logger.error(error_msg)
+            return GuaxinimResponse.error(error_msg)
+
+    def _get_relevant_context(self, query: str, k_chunks: int = 5) -> tuple[str, list]:
         """Get relevant context from the document database."""
         if not self.searcher:
             logger.warning("Document searcher not available, proceeding without context")
-            return ""
+            return "", []
 
         logger.info("Starting context search")
         logger.debug(f"Query: {query}")
@@ -140,25 +150,37 @@ class GuaxinimBot:
 
         # Format context string
         context_parts = []
+        sources = []
 
         # Add relevant chunks
+        seen_sources = set()
         for chunk in chunks:
             context_parts.append(
                 f"From '{chunk['title']}':\n"
                 f"{chunk['chunk_text']}\n"
                 f"(Source: {chunk['source']})\n"
             )
+            if chunk['source'] not in seen_sources:
+                sources.append({
+                    'title': chunk['title'],
+                    'url': chunk['source']
+                })
+                seen_sources.add(chunk['source'])
 
         # Add relevant titles if they're different from chunk sources
-        chunk_sources = {chunk['source'] for chunk in chunks}
         for title in titles:
-            if title['source'] not in chunk_sources:
+            if title['source'] not in seen_sources:
                 context_parts.append(
                     f"Additional relevant article: {title['title']}\n"
                     f"(Source: {title['source']})\n"
                 )
+                sources.append({
+                    'title': title['title'],
+                    'url': title['source']
+                })
+                seen_sources.add(title['source'])
 
-        return "\n".join(context_parts)
+        return "\n".join(context_parts), sources
 
     def ask_guaxinim(self, query: str) -> GuaxinimResponse:
         """
@@ -172,41 +194,14 @@ class GuaxinimBot:
         """
         try:
             # Get relevant context
-            logger.debug(f"TESTE Processing query: {query}")
-            sources = []
-            
-            if self.searcher:
-                # Get chunks and titles
-                chunks = self.searcher.search_similar_chunks(query, k=5)
-                titles = self.searcher.search_similar_titles(query, k=2)
-                
-                # Combine chunks and titles into sources list
-                seen_sources = set()
-                for chunk in chunks:
-                    if chunk['source'] not in seen_sources:
-                        sources.append({
-                            'title': chunk['title'],
-                            'source': "".join(chunk['source'].split())
-                        })
-                        seen_sources.add(chunk['source'])
-                
-                for title in titles:
-                    if title['source'] not in seen_sources:
-                        sources.append({
-                            'title': title['title'],
-                            'source': "".join(title['source'].split())
-                        })
-                        seen_sources.add(title['source'])
-                
-                context = self._get_relevant_context(query)
-            else:
-                context = ""
+            logger.debug(f"Processing query: {query}")
+            context_str, sources = self._get_relevant_context(query)
             
             # Prepare the prompt with context
-            if context:
+            if context_str:
                 logger.debug("Using context-based prompt")
                 prompt = self.CONTEXT_PROMPT_TEMPLATE.format(
-                    context_str=context,
+                    context_str=context_str,
                     query_str=query
                 )
             else:
@@ -236,7 +231,7 @@ class GuaxinimBot:
             logger.error(error_msg)
             return GuaxinimResponse.error(str(e))
 
-    def improve_coffee(self, coffee_data: CoffeePreparationData) -> str:
+    def improve_coffee(self, coffee_data: CoffeePreparationData) -> GuaxinimResponse:
         """
         Analyze current coffee preparation parameters and suggest improvements.
 
@@ -244,12 +239,13 @@ class GuaxinimBot:
             coffee_data (CoffeePreparationData): Current coffee preparation parameters
 
         Returns:
-            str: AI-generated suggestions for improving coffee preparation
+            GuaxinimResponse: Object containing the suggestions and sources
         """
         try:
             # Start with required parameters
             params = [
                 f"Issue: {coffee_data.issue_encountered}",
+                f"Brewing method: {coffee_data.brewing_method}",
                 f"Coffee amount: {coffee_data.amount_of_coffee}g",
                 f"Water amount: {coffee_data.amount_of_water}ml",
             ]
@@ -272,22 +268,41 @@ class GuaxinimBot:
             if coffee_data.notes:
                 params.append(f"Additional notes: {coffee_data.notes}")
 
-            prompt = "Analyze these coffee parameters and suggest improvements:\n"
-            prompt += "\n".join(params)
+            # Get relevant context about the issue and brewing method
+            query = f"How to fix {coffee_data.issue_encountered} in {coffee_data.brewing_method} coffee"
+            sources = []
+            context_str = ""
             
+            if self.searcher:
+                context_str, sources = self._get_relevant_context(query)
+
+            # Create the prompt with parameters and context
+            prompt = "You are a professional coffee barista helping someone improve their coffee preparation.\n\n"
+            if context_str:
+                prompt += f"Here is some relevant information:\n{context_str}\n\n"
+            prompt += "Current parameters:\n"
+            prompt += "\n".join(params)
+            prompt += "\n\nBased on these parameters and the provided information, provide specific suggestions for improvement. "
+            prompt += "Focus on the most impactful changes they can make to address their issue. "
+            prompt += "Format your response in markdown for better readability."
+
             response = self.client.chat.completions.create(
                 model=self.GPT_MODEL,
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a professional coffee barista expert.",
+                        "content": "You are a professional coffee barista. Based on the provided information and parameters, suggest improvements to help the user make better coffee. Always cite sources when using information from the provided context. Format your response in markdown.",
                     },
                     {"role": "user", "content": prompt},
                 ],
                 temperature=self.TEMPERATURE,
-                max_tokens=500,
-                store=True,
+                max_tokens=1000,
             )
-            return response.choices[0].message.content
-        except (APIError, APIConnectionError) as e:
-            return f"Error analyzing coffee parameters: {str(e)}"
+            return GuaxinimResponse(
+                answer=response.choices[0].message.content,
+                sources=sources
+            )
+        except Exception as e:
+            error_msg = f"Error generating improvement suggestions: {str(e)}"
+            logger.error(error_msg)
+            return GuaxinimResponse.error(error_msg)

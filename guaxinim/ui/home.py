@@ -44,6 +44,11 @@ def get_coffee_preparation_data(show_all_fields: bool = True) -> CoffeePreparati
         ["Too acidic", "Too bitter", "Seems under-extracted", "Other"],
     )
 
+    brewing_method = st.selectbox(
+        "Brewing method (required):",
+        BREWING_METHODS,
+    )
+
     amount_of_coffee = st.number_input(
         "Amount of coffee in grams (required):",
         min_value=0.0,
@@ -125,6 +130,7 @@ def get_coffee_preparation_data(show_all_fields: bool = True) -> CoffeePreparati
 
         return CoffeePreparationData(
             issue_encountered=issue,
+            brewing_method=brewing_method,
             amount_of_coffee=amount_of_coffee,
             amount_of_water=amount_of_water,
             type_of_bean=type_of_bean,
@@ -139,6 +145,7 @@ def get_coffee_preparation_data(show_all_fields: bool = True) -> CoffeePreparati
 
     return CoffeePreparationData(
         issue_encountered=issue,
+        brewing_method=brewing_method,
         amount_of_coffee=amount_of_coffee,
         amount_of_water=amount_of_water,
     )
@@ -156,8 +163,13 @@ def learn_coffee_making():
 
     if st.button("Get Brewing Guide"):
         with st.spinner("Generating your personalized brewing guide..."):
-            guide = guaxinim_bot.get_coffee_guide(method)
-            st.markdown(guide)
+            response = guaxinim_bot.get_coffee_guide(method)
+            st.markdown(response.answer)
+            
+            if response.sources:
+                st.markdown("### Sources")
+                for source in response.sources:
+                    st.markdown(f"- {source['title']} ([link]({source['url']}))")
 
 
 def improve_coffee():
@@ -176,8 +188,13 @@ def improve_coffee():
 
     if st.button("Get Improvement Suggestions"):
         with st.spinner("Analyzing your coffee parameters..."):
-            suggestions = guaxinim_bot.improve_coffee(coffee_data)
-            st.markdown(suggestions)
+            response = guaxinim_bot.improve_coffee(coffee_data)
+            st.markdown(response.answer)
+            
+            if response.sources:
+                st.markdown("### Sources")
+                for source in response.sources:
+                    st.markdown(f"- {source['title']} ([link]({source['url']}))")
 
 
 def learn_about_coffee():
@@ -233,7 +250,7 @@ def learn_about_coffee():
             if response.sources:
                 st.write("### Sources Used")
                 for source in response.sources:
-                    st.markdown(f"- [{source['title']}]({source['source']})")
+                    st.markdown(f"- [{source['title']}]({source['url']})")
 
 
 def main():
