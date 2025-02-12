@@ -186,7 +186,7 @@ class GuaxinimBot:
                     if chunk['source'] not in seen_sources:
                         sources.append({
                             'title': chunk['title'],
-                            'source': chunk['source']
+                            'source': "".join(chunk['source'].split())
                         })
                         seen_sources.add(chunk['source'])
                 
@@ -194,7 +194,7 @@ class GuaxinimBot:
                     if title['source'] not in seen_sources:
                         sources.append({
                             'title': title['title'],
-                            'source': title['source']
+                            'source': "".join(title['source'].split())
                         })
                         seen_sources.add(title['source'])
                 

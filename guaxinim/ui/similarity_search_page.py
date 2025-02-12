@@ -53,7 +53,7 @@ def search_coffee_documents():
             display_chunk_results(chunk_results)
             
         with col2:
-            st.subheader("Related Articles")
+            st.subheader("Most Related Titles")
             title_results = searcher.search_similar_titles(query, k=2)
             display_title_results(title_results)
     else:

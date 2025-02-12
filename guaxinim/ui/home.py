@@ -233,8 +233,7 @@ def learn_about_coffee():
             if response.sources:
                 st.write("### Sources Used")
                 for source in response.sources:
-                    url = "".join(source['source'].split())
-                    st.markdown(f"- [{source['title']}]({url})")
+                    st.markdown(f"- [{source['title']}]({source['source']})")
 
 
 def main():
