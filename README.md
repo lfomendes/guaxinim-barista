@@ -96,6 +96,34 @@ Run the quality checks:
 ./run_quality_checks.sh
 ```
 
+## Utility Scripts
+
+Guaxinim comes with several utility scripts to help you process different types of content:
+
+### PDF Processing
+```bash
+# Process PDF files from data/raw/pdf directory
+python scripts/process_pdfs.py
+```
+This script converts PDF files into JSON format with extracted text, summaries, and metadata.
+
+### YouTube Content
+```bash
+# Crawl videos from a YouTube channel (default: James Hoffmann)
+python scripts/crawl_hoffmann_videos.py
+
+# Process downloaded video transcripts
+python scripts/process_transcripts.py
+```
+These scripts help you download and process YouTube video transcripts as knowledge sources.
+
+### Embeddings Creation
+```bash
+# Create embeddings for all processed documents
+python scripts/create_embeddings.py
+```
+Run this script after adding new content to update the search index.
+
 ## Contributing
 
 1. Fork the repository
