@@ -49,6 +49,10 @@ htmlcov/
 .nox/
 .pytest_cache/
 coverage.xml
+
+# Data files
+data/raw/*
+!data/raw/.gitkeep
 *.cover
 .hypothesis/
 
