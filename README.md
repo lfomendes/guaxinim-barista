@@ -7,6 +7,33 @@ Guaxinim is an AI-powered coffee assistant that helps you brew the perfect cup o
 - **Coffee Brewing Guides**: Get detailed instructions for various brewing methods (V60, French Press, Espresso, etc.)
 - **Coffee Improvement Suggestions**: Input your current coffee parameters and get personalized suggestions
 - **Coffee Knowledge Base**: Ask questions about coffee and get expert answers
+- **Custom Knowledge Sources**: Add your own coffee knowledge through JSON files
+
+## Adding Custom Knowledge Sources
+
+You can extend Guaxinim's knowledge base by adding your own JSON files before running the application. Here's how:
+
+1. Create a JSON file with your coffee knowledge in the following format:
+```json
+{
+    "title": "Your Coffee Guide Title",
+    "source": "https://your-source-url.com",
+    "content": "Your detailed coffee knowledge content",
+    "summary": "A brief summary of the content",
+    "tags": ["coffee", "brewing", "guide"]
+}
+```
+
+2. Place your JSON file in one of these directories:
+   - `data/raw/pdf_processed/`: For processed PDF documents
+   - `data/raw/youtube_processed/`: For processed YouTube transcripts
+
+3. Run the embeddings creation script:
+```bash
+python scripts/create_embeddings.py
+```
+
+Your knowledge will be available in the next Streamlit session!
 
 ## Installation
 
