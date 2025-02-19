@@ -71,7 +71,7 @@ class GuaxinimBot:
             )
         self.client = OpenAI()
         try:
-            self.searcher = DocumentSearcher('data/json/hoffman_pdf.json')
+            self.searcher = DocumentSearcher()
             logger.info("Document searcher initialized successfully")
         except Exception as e:
             logger.warning(f"Could not initialize document searcher: {e}")
