@@ -7,6 +7,33 @@ Guaxinim is an AI-powered coffee assistant that helps you brew the perfect cup o
 - **Coffee Brewing Guides**: Get detailed instructions for various brewing methods (V60, French Press, Espresso, etc.)
 - **Coffee Improvement Suggestions**: Input your current coffee parameters and get personalized suggestions
 - **Coffee Knowledge Base**: Ask questions about coffee and get expert answers
+- **Custom Knowledge Sources**: Add your own coffee knowledge through JSON files
+
+## Adding Custom Knowledge Sources
+
+You can extend Guaxinim's knowledge base by adding your own JSON files before running the application. Here's how:
+
+1. Create a JSON file with your coffee knowledge in the following format:
+```json
+{
+    "title": "Your Coffee Guide Title",
+    "source": "https://your-source-url.com",
+    "content": "Your detailed coffee knowledge content",
+    "summary": "A brief summary of the content",
+    "tags": ["coffee", "brewing", "guide"]
+}
+```
+
+2. Place your JSON file in one of these directories:
+   - `data/raw/pdf_processed/`: For processed PDF documents
+   - `data/raw/youtube_processed/`: For processed YouTube transcripts
+
+3. Run the embeddings creation script:
+```bash
+python scripts/create_embeddings.py
+```
+
+Your knowledge will be available in the next Streamlit session!
 
 ## Installation
 
@@ -68,6 +95,45 @@ Run the quality checks:
 ```bash
 ./run_quality_checks.sh
 ```
+
+## Utility Scripts
+
+Guaxinim comes with several utility scripts to help you process different types of content:
+
+### PDF Processing
+```bash
+# Process PDF files from data/raw/pdf directory
+python scripts/process_pdfs.py
+```
+This script converts PDF files into JSON format with extracted text, summaries, and metadata.
+
+### YouTube Content
+```bash
+# Crawl videos from any YouTube channel
+python scripts/crawl_youtube_videos.py "https://www.youtube.com/@channelname"
+
+# Process downloaded video transcripts
+python scripts/process_transcripts.py
+```
+These scripts help you download and process YouTube video transcripts as knowledge sources. The crawler script requires a YouTube API key to be set in your `.env` file:
+
+```
+YOUTUBE_API_KEY=your_api_key_here
+```
+
+To get a YouTube API key:
+1. Go to the [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select an existing one
+3. Enable the YouTube Data API v3
+4. Create credentials (API key)
+5. Copy the API key and paste it in your `.env` file
+
+### Embeddings Creation
+```bash
+# Create embeddings for all processed documents
+python scripts/create_embeddings.py
+```
+Run this script after adding new content to update the search index.
 
 ## Contributing
 

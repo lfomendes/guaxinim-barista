@@ -16,6 +16,16 @@ from guaxinim.core.logger import logger
 # Load environment variables
 load_dotenv(override=True)
 
+def get_env_var(key: str) -> str:
+    """Get environment variable from either .env or Streamlit secrets"""
+    # Try to get from streamlit secrets first
+    try:
+        import streamlit as st
+        return st.secrets[key]
+    except:
+        # Fall back to os.environ
+        return os.getenv(key)
+
 
 @dataclass
 class GuaxinimResponse:
@@ -65,13 +75,15 @@ class GuaxinimBot:
 
     def __init__(self):
         """Initialize the GuaxinimBot with API key validation and OpenAI client setup."""
-        if not os.getenv("OPENAI_API_KEY"):
+        api_key = get_env_var("OPENAI_API_KEY")
+        if not api_key:
             raise ValueError(
                 "OpenAI API key not found. Please set the OPENAI_API_KEY environment variable."
             )
+        os.environ["OPENAI_API_KEY"] = api_key  # Set for OpenAI client
         self.client = OpenAI()
         try:
-            self.searcher = DocumentSearcher('data/json/hoffman_pdf.json')
+            self.searcher = DocumentSearcher()
             logger.info("Document searcher initialized successfully")
         except Exception as e:
             logger.warning(f"Could not initialize document searcher: {e}")

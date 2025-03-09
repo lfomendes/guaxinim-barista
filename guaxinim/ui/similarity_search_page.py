@@ -35,7 +35,7 @@ def search_coffee_documents():
 
     # Initialize the document searcher
     try:
-        searcher = DocumentSearcher('data/json/hoffman_pdf.json')
+        searcher = DocumentSearcher()
     except Exception as e:
         st.error("Error loading document database. Please ensure the document database exists.")
         return

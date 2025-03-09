@@ -40,7 +40,7 @@ class TestDocumentSearcher(unittest.TestCase):
 
             # Mock the file operations
             with patch('builtins.open'):
-                self.searcher = DocumentSearcher('fake_path.json')
+                self.searcher = DocumentSearcher()
 
                 # Mock the FAISS indices
                 self.searcher.chunk_index = MagicMock()
@@ -60,7 +60,7 @@ class TestDocumentSearcher(unittest.TestCase):
         results = self.searcher._collect_search_results(
             distances=distances,
             indices=indices,
-            include_chunk_text=True
+            search_type='chunk'
         )
 
         # Verify results
@@ -81,7 +81,7 @@ class TestDocumentSearcher(unittest.TestCase):
         results = self.searcher._collect_search_results(
             distances=distances,
             indices=indices,
-            include_chunk_text=False
+            search_type='title'
         )
 
         # Verify results
@@ -102,7 +102,7 @@ class TestDocumentSearcher(unittest.TestCase):
         results = self.searcher._collect_search_results(
             distances=distances,
             indices=indices,
-            include_chunk_text=True
+            search_type='chunk'
         )
 
         # Verify results
@@ -119,7 +119,7 @@ class TestDocumentSearcher(unittest.TestCase):
         results = self.searcher._collect_search_results(
             distances=distances,
             indices=indices,
-            include_chunk_text=True
+            search_type='chunk'
         )
 
         # Verify results
@@ -137,7 +137,7 @@ class TestDocumentSearcher(unittest.TestCase):
         results = self.searcher._collect_search_results(
             distances=distances,
             indices=indices,
-            include_chunk_text=True
+            search_type='chunk'
         )
 
         # Verify results
