@@ -109,13 +109,24 @@ This script converts PDF files into JSON format with extracted text, summaries, 
 
 ### YouTube Content
 ```bash
-# Crawl videos from a YouTube channel (default: James Hoffmann)
-python scripts/crawl_hoffmann_videos.py
+# Crawl videos from any YouTube channel
+python scripts/crawl_youtube_videos.py "https://www.youtube.com/@channelname"
 
 # Process downloaded video transcripts
 python scripts/process_transcripts.py
 ```
-These scripts help you download and process YouTube video transcripts as knowledge sources.
+These scripts help you download and process YouTube video transcripts as knowledge sources. The crawler script requires a YouTube API key to be set in your `.env` file:
+
+```
+YOUTUBE_API_KEY=your_api_key_here
+```
+
+To get a YouTube API key:
+1. Go to the [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select an existing one
+3. Enable the YouTube Data API v3
+4. Create credentials (API key)
+5. Copy the API key and paste it in your `.env` file
 
 ### Embeddings Creation
 ```bash
