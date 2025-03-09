@@ -18,7 +18,8 @@ class YoutubeCrawler:
     def __init__(self, number_of_videos: int = 20):
         """Initialize the crawler using YouTube API key from environment variables."""
         load_dotenv()
-        api_key = os.getenv('YOUTUBE_API_KEY')
+        from .guaxinim_bot import get_env_var
+        api_key = get_env_var('YOUTUBE_API_KEY')
         if not api_key:
             raise ValueError('YOUTUBE_API_KEY not found in environment variables')
             

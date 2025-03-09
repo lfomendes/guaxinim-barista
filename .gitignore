@@ -92,3 +92,4 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.streamlit/secrets.toml
