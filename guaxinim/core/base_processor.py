@@ -15,23 +15,32 @@ class BaseProcessor:
 
     def get_summary_and_tags(self, text: str, title: str) -> Tuple[str, List[str]]:
         """Generate summary and tags using OpenAI."""
-        prompt = f"""Given the following document title and content, please provide:
-                    1. A concise summary of the content (max 200 words)
-                    2. 5 relevant tags that best represent the document's content
+        prompt = f"""Goal: Analyze the provided document and create a concise summary with relevant categorization tags that capture its key themes and content.
 
-                    Title: {title}
-                    Content: {text}
-
-                    Please format your response as follows:
+                    Return Format:
+                    Your response must follow this exact structure:
                     SUMMARY:
-                    [Your summary here]
+                    [A single paragraph of maximum 200 words that captures the main points]
 
                     TAGS:
                     - [tag1]
                     - [tag2]
                     - [tag3]
                     - [tag4]
-                    - [tag5]"""
+                    - [tag5]
+
+                    Warnings:
+                    - Summary must be exactly one paragraph
+                    - Each tag should be a single word or short phrase (2-3 words max)
+                    - Tags should be in lowercase with hyphens for spaces
+                    - Avoid overly generic tags
+                    - Ensure tags are ordered by relevance
+
+                    Context:
+                    Title: {title}
+                    Content: {text}
+
+                    You are an expert document analyst focusing on extracting key information and themes from technical content."""
 
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo-16k",

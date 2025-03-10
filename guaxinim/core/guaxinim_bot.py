@@ -50,26 +50,65 @@ class GuaxinimBot:
     GPT_MODEL = "gpt-4o-mini"
     TEMPERATURE = 0.2  # Lower temperature for more focused and consistent responses
 
-    COFFEE_GUIDE_PROMPT = """You are a professional coffee barista with years of experience.
-    You are teaching someone how to make an excellent cup of coffee using the {method} method.
-    Please provide a detailed, step-by-step guide that includes:
-    1. Required equipment
-    2. Recommended coffee-to-water ratio
-    3. Grind size recommendation
-    4. Water temperature
-    5. Detailed brewing steps
-    6. Common mistakes to avoid
-    7. Tips for achieving the best results
+    COFFEE_GUIDE_PROMPT = """Goal: Create a comprehensive brewing guide for making coffee using the {method} method, ensuring it is detailed enough for a beginner to follow successfully.
 
-    Format your response in markdown for better readability."""
+Return Format:
+Your response MUST be in markdown format with the following sections:
 
-    CONTEXT_PROMPT_TEMPLATE = """Context information is below.
+# {method} Brewing Guide
+
+## Required Equipment
+* [List of required equipment]
+
+## Specifications
+* Coffee-to-Water Ratio: [e.g., 1:16]
+* Grind Size: [with specific reference points]
+* Water Temperature: [in both Celsius and Fahrenheit]
+
+## Step-by-Step Instructions
+1. [First step]
+2. [Second step]
+...
+
+## Common Mistakes to Avoid
+* [First mistake]
+* [Second mistake]
+...
+
+## Pro Tips
+* [First tip]
+* [Second tip]
+...
+
+Warnings:
+- Be extremely precise with measurements and timings
+- Ensure water temperature is accurate for the specific method
+- Grind size descriptions must be clear and relatable
+- All equipment must be standard and commonly available
+
+Context:
+You are a professional barista with years of experience teaching beginners. Your guide should be thorough yet approachable."""
+
+    CONTEXT_PROMPT_TEMPLATE = """Goal: Provide a clear, accurate, and helpful answer to a coffee-related question using both provided context and barista expertise.
+
+    Return Format:
+    Your response should be structured as follows:
+    1. Direct answer to the question (2-3 sentences)
+    2. Supporting explanation with technical details (if relevant)
+    3. Practical tips or recommendations (if applicable)
+    4. References to specific sources from context (if available)
+
+    Warnings:
+    - Stick to factual information from the context when available
+    - Clearly distinguish between context-based information and general barista knowledge
+    - Avoid speculation or unsupported claims
+    - Keep the answer focused and relevant to the specific query
+
+    Context:
     ---------------------
     {context_str}
     ---------------------
-    Given the context information and your expertise as a professional barista,
-    provide a 
-     answer to the query.
+
     Query: {query_str}
     Answer: """
 
@@ -108,11 +147,10 @@ class GuaxinimBot:
             if self.searcher:
                 context_str, sources = self._get_relevant_context(query)
 
-            # Create the prompt with context
-            prompt = "You are a professional coffee barista expert.\n\n"
+            # Create the prompt with main guide content first, then add context if available
+            prompt = self.COFFEE_GUIDE_PROMPT.format(method=method)
             if context_str:
-                prompt += f"Here is some relevant information:\n{context_str}\n\n"
-            prompt += self.COFFEE_GUIDE_PROMPT.format(method=method)
+                prompt += f"\n\nAdditional Context:\n{context_str}"
 
             response = self.client.chat.completions.create(
                 model=self.GPT_MODEL,
@@ -209,7 +247,7 @@ class GuaxinimBot:
             logger.debug(f"Processing query: {query}")
             context_str, sources = self._get_relevant_context(query)
             
-            # Prepare the prompt with context
+            # Prepare the prompt
             if context_str:
                 logger.debug("Using context-based prompt")
                 prompt = self.CONTEXT_PROMPT_TEMPLATE.format(
@@ -218,20 +256,18 @@ class GuaxinimBot:
                 )
             else:
                 logger.debug("Using fallback prompt without context")
-                prompt = f"As a professional coffee barista, please answer this question: {query}"
+                # Use a simplified version of CONTEXT_PROMPT_TEMPLATE without context section
+                prompt = self.CONTEXT_PROMPT_TEMPLATE.format(
+                    context_str="No additional context available.",
+                    query_str=query
+                )
             
+
             response = self.client.chat.completions.create(
                 model=self.GPT_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional coffee barista expert. Always cite sources when using information from the provided context.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=self.TEMPERATURE,
                 max_tokens=800,
-                store=True,
             )
             
             return GuaxinimResponse(
@@ -288,27 +324,33 @@ class GuaxinimBot:
             if self.searcher:
                 context_str, sources = self._get_relevant_context(query)
 
-            # Create the prompt with parameters and context
-            prompt = "You are a professional coffee barista helping someone improve their coffee preparation.\n\n"
-            if context_str:
-                prompt += f"Here is some relevant information:\n{context_str}\n\n"
-            prompt += "Current parameters:\n"
-            prompt += "\n".join(params)
-            prompt += "\n\nBased on these parameters and the provided information, provide specific suggestions for improvement. "
-            prompt += "Focus on the most impactful changes they can make to address their issue. "
-            prompt += "Format your response in markdown for better readability."
+            # Create the improvement prompt
+            improvement_prompt = f"""Goal: Analyze the current coffee preparation parameters and provide specific suggestions for improvement, focusing on addressing the reported issue.            
+
+            Return Format:
+            Your response should be structured as follows:
+            1. Issue Analysis (2-3 sentences identifying likely causes)
+            2. Key Recommendations (3-5 bullet points)
+            3. Detailed Adjustments (specific parameter changes)
+            4. Additional Tips (if relevant)
+
+            Warnings:
+            - Focus on the most impactful changes first
+            - Be specific with measurements and adjustments
+            - Explain the reasoning behind each recommendation
+            - Reference sources when using contextual information
+
+            Current Parameters:
+            {"\n".join(params)}
+
+            Additional Context:
+            {context_str if context_str else "No additional context available."}"""
 
             response = self.client.chat.completions.create(
                 model=self.GPT_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional coffee barista. Based on the provided information and parameters, suggest improvements to help the user make better coffee. Always cite sources when using information from the provided context. Format your response in markdown.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
+                messages=[{"role": "user", "content": improvement_prompt}],
                 temperature=self.TEMPERATURE,
-                max_tokens=1000,
+                max_tokens=1000
             )
             return GuaxinimResponse(
                 answer=response.choices[0].message.content,
