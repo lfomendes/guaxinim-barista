@@ -14,13 +14,25 @@ def display_chunk_results(results):
             st.write("**Relevant Text:**")
             st.write(result['chunk_text'])
 
-def display_title_results(results):
-    """Display title search results in a nice format."""
+def display_summary_results(results):
+    """Display summary search results in a nice format."""
     for i, result in enumerate(results, 1):
         st.write(f"{i}. **{result['title']}**")
         st.write(f"   Score: {result['similarity_score']:.3f}")
         st.write(f"   Source: {result['source']}")
+        if result.get('summary'):
+            st.write(f"   Summary: {result['summary']}")
         st.write("---")
+
+def display_tag_results(results):
+    """Display tag search results in a nice format."""
+    for i, result in enumerate(results, 1):
+        with st.expander(f"{i}. {result['title']}"):
+            st.write("**Source:**", result['source'])
+            if result.get('summary'):
+                st.write("**Summary:**")
+                st.write(result['summary'])
+            st.write("**Tags:**", ", ".join(result['tags']))
 
 def search_coffee_documents():
     """
@@ -29,7 +41,7 @@ def search_coffee_documents():
     """
     st.header("Search Coffee Knowledge")
     st.write("""
-    Search through our coffee knowledge base using natural language. 
+    Search through our coffee knowledge base using natural language or browse by topics. 
     The search will find relevant content based on meaning, not just keywords.
     """)
 
@@ -40,21 +52,48 @@ def search_coffee_documents():
         st.error("Error loading document database. Please ensure the document database exists.")
         return
 
-    # Search interface
-    query = st.text_input("Enter your search query:", 
-                         placeholder="e.g., How can I make my coffee less acidic?")
+    # Create tabs for different search methods
+    text_search_tab, tag_search_tab = st.tabs(["Text Search", "Topic Search"])
 
-    if query:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Most Relevant Chunks")
-            chunk_results = searcher.search_similar_chunks(query, k=3)
-            display_chunk_results(chunk_results)
+    with text_search_tab:
+        # Text search interface
+        query = st.text_input("Enter your search query:", 
+                            placeholder="e.g., How can I make my coffee less acidic?")
+
+        if query:
+            col1, col2 = st.columns(2)
             
-        with col2:
-            st.subheader("Most Related Titles")
-            title_results = searcher.search_similar_titles(query, k=2)
-            display_title_results(title_results)
-    else:
-        st.info("Enter a query above to search through our coffee knowledge base.")
+            with col1:
+                st.subheader("Most Relevant Chunks")
+                chunk_results = searcher.search_similar_chunks(query, k=3)
+                display_chunk_results(chunk_results)
+                
+            with col2:
+                st.subheader("Most Related Summaries")
+                summary_results = searcher.search_similar_summaries(query, k=2)
+                display_summary_results(summary_results)
+        else:
+            st.info("Enter a query above to search through our coffee knowledge base.")
+
+    with tag_search_tab:
+        # Tag search interface
+        tags_with_freq = searcher.get_tags_with_frequency()
+        if tags_with_freq:
+            # Format options to show tag and count
+            tag_options = [tag for tag, _ in tags_with_freq]
+            tag_display = {tag: f"{tag.replace('_', ' ').title()} ({count} documents)" 
+                          for tag, count in tags_with_freq}
+            
+            selected_tag = st.selectbox(
+                "Select a topic to explore:",
+                options=tag_options,
+                format_func=lambda x: tag_display[x]
+            )
+
+            if selected_tag:
+                count = dict(tags_with_freq)[selected_tag]
+                st.subheader(f"Documents about {selected_tag.replace('_', ' ').title()} ({count} documents)")
+                tag_results = searcher.search_by_tag(selected_tag, limit=10)
+                display_tag_results(tag_results)
+        else:
+            st.info("No topics found in the knowledge base.")
