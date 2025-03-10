@@ -174,6 +174,63 @@ class DocumentSearcher:
         
         return self._collect_search_results(distances[0], indices[0], search_type='summary')
 
+    def get_tags_with_frequency(self) -> List[Tuple[str, int]]:
+        """Get all unique tags from the document collection with their frequencies.
+        
+        Returns:
+            List[Tuple[str, int]]: List of tuples containing (tag, frequency) pairs,
+                                   sorted by frequency in descending order
+        """
+        tag_counts = {}
+        for doc in self.documents:
+            if doc.get('tags'):
+                for tag in doc['tags']:
+                    tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        
+        # Sort by frequency (descending) and then by tag name (ascending)
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: (-x[1], x[0]))
+        return sorted_tags
+
+    def get_all_tags(self) -> List[str]:
+        """Get all unique tags from the document collection.
+        
+        Returns:
+            List[str]: List of unique tags, sorted by frequency in descending order
+        """
+        return [tag for tag, _ in self.get_tags_with_frequency()]
+    
+    def _clean_url(self, url: str) -> str:
+        """Clean a URL by removing whitespace and normalizing.
+        
+        Args:
+            url (str): URL to clean
+            
+        Returns:
+            str: Cleaned URL
+        """
+        return url.replace(' ', '')
+
+    def search_by_tag(self, tag: str, limit: int = 10) -> List[Dict]:
+        """Search for documents that have a specific tag.
+        
+        Args:
+            tag (str): The tag to search for
+            limit (int): Maximum number of documents to return
+            
+        Returns:
+            List[Dict]: List of documents with the specified tag
+        """
+        results = []
+        for doc in self.documents:
+            if doc.get('tags') and tag in doc['tags']:
+                results.append({
+                    'title': doc['title'],
+                    'source': self._clean_url(doc['source']),
+                    'summary': doc.get('summary', ''),
+                    'tags': doc['tags']
+                })
+        return results[:limit]
+
     def _collect_search_results(self, distances: np.ndarray, indices: np.ndarray, search_type: str = 'chunk') -> List[Dict]:
         """Collect search results from FAISS search output.
         
@@ -193,7 +250,7 @@ class DocumentSearcher:
                     doc = self.documents[doc_idx]
                     result = {
                         'title': doc['title'],
-                        'source': doc['source'],
+                        'source': self._clean_url(doc['source']),
                         'chunk_text': chunk_text,
                         'tags': doc.get('tags', []),
                         'similarity_score': 1 - dist/2
@@ -203,17 +260,16 @@ class DocumentSearcher:
                     doc = self.documents[doc_idx]
                     result = {
                         'title': title,
-                        'source': doc['source'],
-                        'summary': doc.get('summary', ''),
+                        'source': self._clean_url(doc['source']),
                         'tags': doc.get('tags', []),
                         'similarity_score': 1 - dist/2
                     }
-                else:  # summary
+                elif search_type == 'summary':
                     doc_idx, summary = self.summary_mapping[idx]
                     doc = self.documents[doc_idx]
                     result = {
                         'title': doc['title'],
-                        'source': doc['source'],
+                        'source': self._clean_url(doc['source']),
                         'summary': summary,
                         'tags': doc.get('tags', []),
                         'similarity_score': 1 - dist/2
