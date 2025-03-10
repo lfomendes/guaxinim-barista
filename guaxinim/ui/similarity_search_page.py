@@ -39,6 +39,15 @@ def search_coffee_documents():
     Displays the similarity search interface where users can search through coffee-related documents.
     Uses semantic search to find relevant content based on user queries.
     """
+    # Add side menu for RAG settings
+    with st.sidebar:
+        st.subheader("Search Settings")
+        rag_return = st.selectbox(
+            "RAG return",
+            options=["chunks", "whole file"],
+            help="Choose how to return context from the knowledge base"
+        )
+
     st.header("Search Coffee Knowledge")
     st.write("""
     Search through our coffee knowledge base using natural language or browse by topics. 
