@@ -48,7 +48,8 @@ class GuaxinimBot:
 
     # OpenAI model configuration
     GPT_MODEL = "gpt-4o-mini"
-    TEMPERATURE = 0.2  # Lower temperature for more focused and consistent responses
+    TEMPERATURE = 0.2
+    DEFAULT_MAX_WHOLE_FILES = 2  # Default number of whole files to return  # Lower temperature for more focused and consistent responses
 
     COFFEE_GUIDE_PROMPT = """Goal: Create a comprehensive brewing guide for making coffee using the {method} method, ensuring it is detailed enough for a beginner to follow successfully.
 
@@ -112,8 +113,15 @@ You are a professional barista with years of experience teaching beginners. Your
     Query: {query_str}
     Answer: """
 
-    def __init__(self):
-        """Initialize the GuaxinimBot with API key validation and OpenAI client setup."""
+    def __init__(self, max_whole_files: int = None, similarity_field: str = "chunks"):
+        """Initialize the GuaxinimBot with API key validation and OpenAI client setup.
+        
+        Args:
+            max_whole_files (int, optional): Maximum number of whole files to return in 'whole file' mode.
+                                           Defaults to DEFAULT_MAX_WHOLE_FILES if not specified.
+            similarity_field (str, optional): Field to use for similarity search ('chunks' or 'summary').
+                                           Defaults to 'chunks'.
+        """
         api_key = get_env_var("OPENAI_API_KEY")
         if not api_key:
             raise ValueError(
@@ -121,6 +129,8 @@ You are a professional barista with years of experience teaching beginners. Your
             )
         os.environ["OPENAI_API_KEY"] = api_key  # Set for OpenAI client
         self.client = OpenAI()
+        self.max_whole_files = max_whole_files or self.DEFAULT_MAX_WHOLE_FILES
+        self.similarity_field = similarity_field
         try:
             self.searcher = DocumentSearcher()
             logger.info("Document searcher initialized successfully")
@@ -128,12 +138,13 @@ You are a professional barista with years of experience teaching beginners. Your
             logger.warning(f"Could not initialize document searcher: {e}")
             self.searcher = None
 
-    def get_coffee_guide(self, method: str) -> GuaxinimResponse:
+    def get_coffee_guide(self, method: str, rag_return_type: str = "chunks") -> GuaxinimResponse:
         """
         Get a detailed guide for making coffee using the specified method.
 
         Args:
             method (str): The coffee brewing method (e.g., 'V60', 'French Press')
+            rag_return_type (str): Type of context to return ('chunks' or 'whole file')
 
         Returns:
             GuaxinimResponse: Object containing the guide and its sources
@@ -145,7 +156,8 @@ You are a professional barista with years of experience teaching beginners. Your
             context_str = ""
             
             if self.searcher:
-                context_str, sources = self._get_relevant_context(query)
+                logger.info(f"Searching for relevant context with query: {query}")
+                context_str, sources = self._get_relevant_context(query, rag_return_type=rag_return_type)
 
             # Create the prompt with main guide content first, then add context if available
             prompt = self.COFFEE_GUIDE_PROMPT.format(method=method)
@@ -168,28 +180,56 @@ You are a professional barista with years of experience teaching beginners. Your
             logger.error(error_msg)
             return GuaxinimResponse.error(error_msg)
 
-    def _get_relevant_context(self, query: str, k_chunks: int = 5) -> tuple[str, list]:
-        """Get relevant context from the document database."""
+    def _get_relevant_context(self, query: str, k_chunks: int = 5, rag_return_type: str = "chunks") -> tuple[str, list]:
+        """Get relevant context from the document database.
+        
+        Args:
+            query (str): The search query
+            k_chunks (int): Number of chunks to retrieve
+            rag_return_type (str): Type of context to return ('chunks' or 'whole file')
+            
+        Returns:
+            tuple[str, list]: Context string and list of sources
+        """
         if not self.searcher:
             logger.warning("Document searcher not available, proceeding without context")
             return "", []
 
         logger.info("Starting context search")
-        logger.debug(f"Query: {query}")
+        logger.info(f"Query: {query}")
         
-        # Get relevant chunks and titles
-        chunks = self.searcher.search_similar_chunks(query, k=k_chunks)
-        titles = self.searcher.search_similar_titles(query, k=2)
-
-        # Log the sources being used
-        logger.info("Found relevant content:")
-        logger.info("Chunks:")
-        for chunk in chunks:
-            logger.info(f"- {chunk['title']} (Score: {chunk['similarity_score']:.3f})")
-
-        logger.info("Titles:")
-        for title in titles:
-            logger.info(f"- {title['title']} (Score: {title['similarity_score']:.3f})")
+        # Get relevant chunks and titles based on similarity field
+        if self.similarity_field == "chunks":
+            # Search by chunks first, then get related titles
+            chunks = self.searcher.search_similar_chunks(query, k=k_chunks)
+            titles = self.searcher.search_similar_titles(query, k=2)
+        else:  # summary mode
+            # Search by summary first - get top k documents by summary
+            summaries = self.searcher.search_similar_summaries(query, k=k_chunks)
+            chunks = []
+            
+            # Get ALL chunks from the top k documents
+            for doc in self.searcher.documents:
+                if any(s['title'] == doc['title'] for s in summaries):
+                    # Get the similarity score from the summary search
+                    summary_score = next(s['similarity_score'] 
+                                        for s in summaries if s['title'] == doc['title'])
+                    # Add ALL chunks from this document
+                    for chunk_text in doc['chunks']:
+                        chunks.append({
+                            'title': doc['title'],
+                            'source': self.searcher._clean_url(doc['source']),
+                            'chunk_text': chunk_text,
+                            'tags': doc.get('tags', []),
+                            'similarity_score': summary_score
+                        })
+            
+            titles = [{
+                'title': s['title'],
+                'source': s['source'],
+                'tags': s.get('tags', []),
+                'similarity_score': s['similarity_score']
+            } for s in summaries]
 
         # Log detailed chunk content at debug level
         for i, chunk in enumerate(chunks):
@@ -201,43 +241,67 @@ You are a professional barista with years of experience teaching beginners. Your
         # Format context string
         context_parts = []
         sources = []
-
-        # Add relevant chunks
         seen_sources = set()
-        for chunk in chunks:
-            context_parts.append(
-                f"From '{chunk['title']}':\n"
-                f"{chunk['chunk_text']}\n"
-                f"(Source: {chunk['source']})\n"
-            )
-            if chunk['source'] not in seen_sources:
-                sources.append({
-                    'title': chunk['title'],
-                    'url': chunk['source']
-                })
-                seen_sources.add(chunk['source'])
 
-        # Add relevant titles if they're different from chunk sources
-        for title in titles:
-            if title['source'] not in seen_sources:
-                context_parts.append(
-                    f"Additional relevant article: {title['title']}\n"
-                    f"(Source: {title['source']})\n"
-                )
-                sources.append({
-                    'title': title['title'],
-                    'url': title['source']
-                })
-                seen_sources.add(title['source'])
+        if rag_return_type == "whole file" and chunks:
+            # Get the two most relevant documents
+            seen_titles = set()
+            for chunk in chunks:
+                if len(seen_titles) >= self.max_whole_files:
+                    break
+                    
+                if chunk['title'] not in seen_titles:
+                    doc = next((d for d in self.searcher.documents if d['title'] == chunk['title']), None)
+                    if doc:
+                        # Use all chunks from this document
+                        context_parts.append(
+                            f"From '{doc['title']}':\n"
+                            f"{' '.join(doc['chunks'])}\n"
+                            f"(Source: {chunk['source']})\n"
+                        )
+                        sources.append({
+                            'title': doc['title'],
+                            'url': chunk['source']
+                        })
+                        seen_titles.add(chunk['title'])
+        else:  # chunks mode
+            # Add relevant chunks
+            for chunk in chunks:
+                if chunk['similarity_score'] > 0.5:  # Only use relevant chunks
+                    context_parts.append(
+                        f"From '{chunk['title']}':\n"
+                        f"{chunk['chunk_text']}\n"
+                        f"(Source: {chunk['source']})\n"
+                    )
+                    if chunk['source'] not in seen_sources:
+                        sources.append({
+                            'title': chunk['title'],
+                            'url': chunk['source']
+                        })
+                        seen_sources.add(chunk['source'])
+
+            # Add relevant titles if they're different from chunk sources
+            for title in titles:
+                if title['similarity_score'] > 0.5 and title['source'] not in seen_sources:
+                    context_parts.append(
+                        f"Additional relevant article: {title['title']}\n"
+                        f"(Source: {title['source']})\n"
+                    )
+                    sources.append({
+                        'title': title['title'],
+                        'url': title['source']
+                    })
+                    seen_sources.add(title['source'])
 
         return "\n".join(context_parts), sources
 
-    def ask_guaxinim(self, query: str) -> GuaxinimResponse:
+    def ask_guaxinim(self, query: str, rag_return_type: str = "chunks") -> GuaxinimResponse:
         """
         Process a coffee-related question and return an AI-generated answer along with sources.
 
         Args:
             query (str): The user's coffee-related question
+            rag_return_type (str): Type of context to return ('chunks' or 'whole file')
 
         Returns:
             GuaxinimResponse: Object containing the answer and its sources
@@ -245,7 +309,7 @@ You are a professional barista with years of experience teaching beginners. Your
         try:
             # Get relevant context
             logger.debug(f"Processing query: {query}")
-            context_str, sources = self._get_relevant_context(query)
+            context_str, sources = self._get_relevant_context(query, rag_return_type=rag_return_type)
             
             # Prepare the prompt
             if context_str:
@@ -279,12 +343,13 @@ You are a professional barista with years of experience teaching beginners. Your
             logger.error(error_msg)
             return GuaxinimResponse.error(str(e))
 
-    def improve_coffee(self, coffee_data: CoffeePreparationData) -> GuaxinimResponse:
+    def improve_coffee(self, coffee_data: CoffeePreparationData, rag_return_type: str = "chunks") -> GuaxinimResponse:
         """
         Analyze current coffee preparation parameters and suggest improvements.
 
         Args:
             coffee_data (CoffeePreparationData): Current coffee preparation parameters
+            rag_return_type (str): Type of context to return ('chunks' or 'whole file')
 
         Returns:
             GuaxinimResponse: Object containing the suggestions and sources
@@ -322,7 +387,7 @@ You are a professional barista with years of experience teaching beginners. Your
             context_str = ""
             
             if self.searcher:
-                context_str, sources = self._get_relevant_context(query)
+                context_str, sources = self._get_relevant_context(query, rag_return_type=rag_return_type)
 
             # Create the improvement prompt
             improvement_prompt = f"""Goal: Analyze the current coffee preparation parameters and provide specific suggestions for improvement, focusing on addressing the reported issue.            
