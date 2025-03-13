@@ -80,7 +80,8 @@ class EmbeddingsProcessor:
             "summary_embedding": summary_embedding,
             "tags": tags,
             "chunks": chunks,
-            "chunk_embeddings": chunk_embeddings
+            "chunk_embeddings": chunk_embeddings,
+            "full_text": full_text  # Include the full text in the final output
         }
 
         return processed_data
