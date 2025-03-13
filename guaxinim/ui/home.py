@@ -23,6 +23,22 @@ BREWING_METHODS = [
 ]
 
 
+def display_sources(sources, title: str = "Sources"):
+    """
+    Display a list of sources with their titles, links, and tags.
+    
+    Args:
+        sources (List[Dict]): List of source dictionaries containing title, url, and optional tags
+        title (str): Title to display above the sources section
+    """
+    if sources:
+        st.markdown(f"### {title}")
+        for source in sources:
+            st.markdown(f"- {source['title']} ([link]({source['url']}))")
+            if source.get('tags'):
+                st.markdown(f"  *{', '.join(source['tags'])}*")
+
+
 def get_coffee_preparation_data(show_all_fields: bool = True) -> CoffeePreparationData:
     """
     Collects coffee preparation parameters from the user interface.
@@ -173,10 +189,7 @@ def learn_coffee_making():
     if st.session_state.guide_response:
         st.markdown(st.session_state.guide_response.answer)
         
-        if st.session_state.guide_response.sources:
-            st.markdown("### Sources")
-            for source in st.session_state.guide_response.sources:
-                st.markdown(f"- {source['title']} ([link]({source['url']}))")
+        display_sources(st.session_state.guide_response.sources)
 
 
 def improve_coffee():
@@ -202,10 +215,7 @@ def improve_coffee():
             response = bot.improve_coffee(coffee_data, rag_return_type=rag_return)
             st.markdown(response.answer)
             
-            if response.sources:
-                st.markdown("### Sources")
-                for source in response.sources:
-                    st.markdown(f"- {source['title']} ([link]({source['url']}))")
+            display_sources(response.sources)
 
 
 def learn_about_coffee():
@@ -262,10 +272,7 @@ def learn_about_coffee():
             st.write(response.answer)
             
             # Display sources if available
-            if response.sources:
-                st.write("### Sources Used")
-                for source in response.sources:
-                    st.markdown(f"- [{source['title']}]({source['url']})")
+            display_sources(response.sources, "Sources Used")
 
 
 def initialize_settings():

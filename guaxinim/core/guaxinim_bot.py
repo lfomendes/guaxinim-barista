@@ -7,7 +7,7 @@ recommendations and answers coffee-related questions using OpenAI's API.
 import os
 from openai import OpenAI, APIError, APIConnectionError
 from dotenv import load_dotenv
-from typing import List, Dict
+from typing import List, Dict, Union
 from dataclasses import dataclass
 from guaxinim.core.coffee_data import CoffeePreparationData
 from src.pdf_processor.similarity_search import DocumentSearcher
@@ -31,7 +31,7 @@ def get_env_var(key: str) -> str:
 class GuaxinimResponse:
     """Response from GuaxinimBot containing the answer and its sources"""
     answer: str
-    sources: List[Dict[str, str]]
+    sources: List[Dict[str, Union[str, List[str]]]]  # Can contain 'title', 'url', and 'tags' fields
     
     @classmethod
     def error(cls, message: str) -> 'GuaxinimResponse':
@@ -49,7 +49,9 @@ class GuaxinimBot:
     # OpenAI model configuration
     GPT_MODEL = "gpt-4o-mini"
     TEMPERATURE = 0.2
-    DEFAULT_MAX_WHOLE_FILES = 2  # Default number of whole files to return  # Lower temperature for more focused and consistent responses
+    DEFAULT_MAX_WHOLE_FILES = 2
+    SIMILARITY_THRESHOLD = 0.5  # Minimum similarity score for considering a document relevant
+    PREVIEW_LENGTH = 500  # Number of characters to show in document previews  # Default number of whole files to return  # Lower temperature for more focused and consistent responses
 
     COFFEE_GUIDE_PROMPT = """Goal: Create a comprehensive brewing guide for making coffee using the {method} method, ensuring it is detailed enough for a beginner to follow successfully.
 
@@ -198,101 +200,96 @@ You are a professional barista with years of experience teaching beginners. Your
         logger.info("Starting context search")
         logger.info(f"Query: {query}")
         
-        # Get relevant chunks and titles based on similarity field
+        # Get relevant documents based on similarity field
         if self.similarity_field == "chunks":
+            logger.info("Searching for relevant chunks")
             # Search by chunks first, then get related titles
-            chunks = self.searcher.search_similar_chunks(query, k=k_chunks)
-            titles = self.searcher.search_similar_titles(query, k=2)
+            results = self.searcher.search_similar_chunks(query, k=k_chunks)
+            title_results = self.searcher.search_similar_titles(query, k=2)
         else:  # summary mode
-            # Search by summary first - get top k documents by summary
-            summaries = self.searcher.search_similar_summaries(query, k=k_chunks)
-            chunks = []
-            
-            # Get ALL chunks from the top k documents
-            for doc in self.searcher.documents:
-                if any(s['title'] == doc['title'] for s in summaries):
-                    # Get the similarity score from the summary search
-                    summary_score = next(s['similarity_score'] 
-                                        for s in summaries if s['title'] == doc['title'])
-                    # Add ALL chunks from this document
-                    for chunk_text in doc['chunks']:
-                        chunks.append({
-                            'title': doc['title'],
-                            'source': self.searcher._clean_url(doc['source']),
-                            'chunk_text': chunk_text,
-                            'tags': doc.get('tags', []),
-                            'similarity_score': summary_score
-                        })
-            
-            titles = [{
-                'title': s['title'],
-                'source': s['source'],
-                'tags': s.get('tags', []),
-                'similarity_score': s['similarity_score']
-            } for s in summaries]
+            logger.info(f"Searching for relevant summaries with k={k_chunks}")
+            # Search by summary first
+            results = self.searcher.search_similar_summaries(query, k=k_chunks)
+            title_results = results  # Use the same results for titles in summary mode
 
-        # Log detailed chunk content at debug level
-        for i, chunk in enumerate(chunks):
-            logger.debug(f"Chunk {i+1} content:")
-            logger.debug(f"Title: {chunk['title']}")
-            logger.debug(f"Source: {chunk['source']}")
-            logger.debug(f"Content: {chunk['chunk_text'][:200]}...")
+        # Early return if no results found
+        if not results:
+            logger.warning("No relevant documents found")
+            return "", []
 
-        # Format context string
+        # Format context string and collect sources
         context_parts = []
         sources = []
         seen_sources = set()
 
-        if rag_return_type == "whole file" and chunks:
-            # Get the two most relevant documents
+        # Helper function to add a source
+        def add_source(result):
+            if result['source'] not in seen_sources and result.get('similarity_score', 0) > self.SIMILARITY_THRESHOLD:
+                sources.append({
+                    'title': result['title'],
+                    'url': result['source'],
+                    'tags': result.get('tags', [])
+                })
+                seen_sources.add(result['source'])
+
+        # Helper function to format document content
+        def format_document_content(result):
+            parts = [f"From '{result['title']}':\n"]
+            
+            # Add relevant section if available (chunk text or summary)
+            relevant_section = result.get('chunk_text') or result.get('summary', '')
+            if relevant_section:
+                parts.append(f"Relevant section: {relevant_section}\n")
+            
+            # Add document context if available
+            if result.get('full_text'):
+                context = result['full_text'][:self.PREVIEW_LENGTH] + '...' if len(result['full_text']) > self.PREVIEW_LENGTH else result['full_text']
+                parts.append(f"Document context: {context}\n")
+            
+            # Add tags if available
+            if result.get('tags'):
+                parts.append(f"Tags: {', '.join(result['tags'])}\n")
+            
+            parts.append(f"(Source: {result['source']})\n")
+            return ''.join(parts)
+
+        # Process results based on mode
+        if rag_return_type == "whole file":
             seen_titles = set()
-            for chunk in chunks:
+            for result in results:
                 if len(seen_titles) >= self.max_whole_files:
                     break
                     
-                if chunk['title'] not in seen_titles:
-                    doc = next((d for d in self.searcher.documents if d['title'] == chunk['title']), None)
-                    if doc:
-                        # Use all chunks from this document
-                        context_parts.append(
-                            f"From '{doc['title']}':\n"
-                            f"{' '.join(doc['chunks'])}\n"
-                            f"(Source: {chunk['source']})\n"
-                        )
-                        sources.append({
-                            'title': doc['title'],
-                            'url': chunk['source']
-                        })
-                        seen_titles.add(chunk['title'])
-        else:  # chunks mode
-            # Add relevant chunks
-            for chunk in chunks:
-                if chunk['similarity_score'] > 0.5:  # Only use relevant chunks
+                if result['title'] not in seen_titles and result.get('similarity_score', 0) > self.SIMILARITY_THRESHOLD:
+                    # Add the full text of the document
                     context_parts.append(
-                        f"From '{chunk['title']}':\n"
-                        f"{chunk['chunk_text']}\n"
-                        f"(Source: {chunk['source']})\n"
+                        f"From '{result['title']}':\n"
+                        f"{result.get('full_text', '')}\n"
+                        f"(Source: {result['source']})\n"
                     )
-                    if chunk['source'] not in seen_sources:
-                        sources.append({
-                            'title': chunk['title'],
-                            'url': chunk['source']
-                        })
-                        seen_sources.add(chunk['source'])
+                    add_source(result)
+                    seen_titles.add(result['title'])
+        else:  # chunks or summary mode
+            # Add relevant chunks/summaries with their context
+            for result in results:
+                if result.get('similarity_score', 0) > self.SIMILARITY_THRESHOLD:
+                    context_parts.append(format_document_content(result))
+                    add_source(result)
 
-            # Add relevant titles if they're different from chunk sources
-            for title in titles:
-                if title['similarity_score'] > 0.5 and title['source'] not in seen_sources:
-                    context_parts.append(
-                        f"Additional relevant article: {title['title']}\n"
-                        f"(Source: {title['source']})\n"
-                    )
-                    sources.append({
-                        'title': title['title'],
-                        'url': title['source']
-                    })
-                    seen_sources.add(title['source'])
+            # Add relevant titles if they're different from existing sources
+            for title in title_results:
+                if title.get('similarity_score', 0) > self.SIMILARITY_THRESHOLD and title['source'] not in seen_sources:
+                    parts = [f"Additional relevant article: {title['title']}\n"]
+                    
+                    # Add tags if available
+                    if title.get('tags'):
+                        parts.append(f"Tags: {', '.join(title['tags'])}\n")
+                        
+                    parts.append(f"(Source: {title['source']})\n")
+                    context_parts.append(''.join(parts))
+                    add_source(title)
 
+        # Always return sources even if no context was added
         return "\n".join(context_parts), sources
 
     def ask_guaxinim(self, query: str, rag_return_type: str = "chunks") -> GuaxinimResponse:
