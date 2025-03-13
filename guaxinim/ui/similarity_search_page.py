@@ -5,6 +5,11 @@ This page allows users to search through coffee-related documents using semantic
 
 import streamlit as st
 from src.pdf_processor.similarity_search import DocumentSearcher
+from guaxinim.core.bot_manager import get_bot
+
+@st.cache_resource
+def get_document_searcher():
+    return DocumentSearcher()
 
 def display_chunk_results(results):
     """Display chunk search results in a nice format."""
@@ -39,14 +44,8 @@ def search_coffee_documents():
     Displays the similarity search interface where users can search through coffee-related documents.
     Uses semantic search to find relevant content based on user queries.
     """
-    # Add side menu for RAG settings
-    with st.sidebar:
-        st.subheader("Search Settings")
-        rag_return = st.selectbox(
-            "RAG return",
-            options=["chunks", "whole file"],
-            help="Choose how to return context from the knowledge base"
-        )
+    # Get RAG settings from session state
+    rag_return = st.session_state.get('rag_return', 'chunks')
 
     st.header("Search Coffee Knowledge")
     st.write("""
@@ -56,7 +55,7 @@ def search_coffee_documents():
 
     # Initialize the document searcher
     try:
-        searcher = DocumentSearcher()
+        searcher = get_document_searcher()
     except Exception as e:
         st.error("Error loading document database. Please ensure the document database exists.")
         return
