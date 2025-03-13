@@ -11,6 +11,19 @@ sys.path.append(project_root)
 
 from guaxinim.core.pdf_processor import PDFProcessor
 
+def process_pdfs(folder_path: str):
+    """Process all PDF files in the specified folder.
+    
+    Args:
+        folder_path (str): Path to the folder containing PDF files
+    """
+    try:
+        processor = PDFProcessor()
+        processor.process_folder(folder_path)
+    except Exception as e:
+        print(f"Error processing PDFs in {folder_path}: {str(e)}")
+        raise
+
 def main():
     """Main function to run the processor."""
     # Load environment variables
@@ -30,8 +43,7 @@ def main():
     folder_name = sys.argv[1]
     
     try:
-        processor = PDFProcessor()
-        processor.process_folder(folder_name)
+        process_pdfs(folder_name)
     except Exception as e:
         print(f"Error processing folder: {str(e)}")
         sys.exit(1)

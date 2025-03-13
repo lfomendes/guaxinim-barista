@@ -20,7 +20,7 @@ class BaseProcessor:
                     Return Format:
                     Your response must follow this exact structure:
                     SUMMARY:
-                    [A single paragraph of maximum 200 words that captures the main points]
+                    [A single paragraph of maximum 300 words that captures the main points]
 
                     TAGS:
                     - [tag1]
@@ -32,7 +32,7 @@ class BaseProcessor:
                     Warnings:
                     - Summary must be exactly one paragraph
                     - Each tag should be a single word or short phrase (2-3 words max)
-                    - Tags should be in lowercase with hyphens for spaces
+                    - Tags should be in lowercase
                     - Avoid overly generic tags
                     - Ensure tags are ordered by relevance
 

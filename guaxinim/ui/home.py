@@ -9,12 +9,8 @@ The app provides three main functionalities:
 
 import streamlit as st
 from guaxinim.core.coffee_data import CoffeePreparationData
-from guaxinim.core.guaxinim_bot import GuaxinimBot
+from guaxinim.core.bot_manager import get_bot
 from guaxinim.ui.similarity_search_page import search_coffee_documents
-
-
-# Initialize the bot
-guaxinim_bot = GuaxinimBot()
 
 # Define brewing methods globally
 BREWING_METHODS = [
@@ -25,6 +21,22 @@ BREWING_METHODS = [
     "Moka Pot",
     "Espresso",
 ]
+
+
+def display_sources(sources, title: str = "Sources"):
+    """
+    Display a list of sources with their titles, links, and tags.
+    
+    Args:
+        sources (List[Dict]): List of source dictionaries containing title, url, and optional tags
+        title (str): Title to display above the sources section
+    """
+    if sources:
+        st.markdown(f"### {title}")
+        for source in sources:
+            st.markdown(f"- {source['title']} ([link]({source['url']}))")
+            if source.get('tags'):
+                st.markdown(f"  *{', '.join(source['tags'])}*")
 
 
 def get_coffee_preparation_data(show_all_fields: bool = True) -> CoffeePreparationData:
@@ -161,15 +173,23 @@ def learn_coffee_making():
     st.header("Learn to Make Perfect Coffee")
     method = st.selectbox("Select your brewing method:", BREWING_METHODS)
 
-    if st.button("Get Brewing Guide"):
+    # Initialize guide key in session state if not present
+    if 'guide_response' not in st.session_state:
+        st.session_state.guide_response = None
+        
+    if st.button("Get Brewing Guide", key="brewing_guide_btn"):
         with st.spinner("Generating your personalized brewing guide..."):
-            response = guaxinim_bot.get_coffee_guide(method)
-            st.markdown(response.answer)
-            
-            if response.sources:
-                st.markdown("### Sources")
-                for source in response.sources:
-                    st.markdown(f"- {source['title']} ([link]({source['url']}))")
+            rag_return = st.session_state.get('rag_return', 'chunks')
+            max_files = st.session_state.get('max_whole_files')
+            similarity_field = st.session_state.get('similarity_field', 'chunks')
+            bot = get_bot(max_whole_files=max_files, similarity_field=similarity_field)
+            st.session_state.guide_response = bot.get_coffee_guide(method, rag_return_type=rag_return)
+    
+    # Display results if we have them
+    if st.session_state.guide_response:
+        st.markdown(st.session_state.guide_response.answer)
+        
+        display_sources(st.session_state.guide_response.sources)
 
 
 def improve_coffee():
@@ -188,13 +208,14 @@ def improve_coffee():
 
     if st.button("Get Improvement Suggestions"):
         with st.spinner("Analyzing your coffee parameters..."):
-            response = guaxinim_bot.improve_coffee(coffee_data)
+            rag_return = st.session_state.get('rag_return', 'chunks')
+            max_files = st.session_state.get('max_whole_files')
+            similarity_field = st.session_state.get('similarity_field', 'chunks')
+            bot = get_bot(max_whole_files=max_files, similarity_field=similarity_field)
+            response = bot.improve_coffee(coffee_data, rag_return_type=rag_return)
             st.markdown(response.answer)
             
-            if response.sources:
-                st.markdown("### Sources")
-                for source in response.sources:
-                    st.markdown(f"- {source['title']} ([link]({source['url']}))")
+            display_sources(response.sources)
 
 
 def learn_about_coffee():
@@ -242,16 +263,56 @@ def learn_about_coffee():
     # Display answer if a question is selected
     if selected_question and selected_question.strip():
         with st.spinner("Getting answer..."):
-            response = guaxinim_bot.ask_guaxinim(selected_question)
+            rag_return = st.session_state.get('rag_return', 'chunks')
+            max_files = st.session_state.get('max_whole_files')
+            similarity_field = st.session_state.get('similarity_field', 'chunks')
+            bot = get_bot(max_whole_files=max_files, similarity_field=similarity_field)
+            response = bot.ask_guaxinim(selected_question, rag_return_type=rag_return)
             st.write("### Answer")
             st.write(response.answer)
             
             # Display sources if available
-            if response.sources:
-                st.write("### Sources Used")
-                for source in response.sources:
-                    st.markdown(f"- [{source['title']}]({source['url']})")
+            display_sources(response.sources, "Sources Used")
 
+
+def initialize_settings():
+    """Initialize application settings in the sidebar"""
+    with st.sidebar:
+        st.subheader("Search Settings")
+        rag_return = st.selectbox(
+            "RAG return",
+            options=["chunks", "whole file"],
+            help="Choose how to return context from the knowledge base"
+        )
+        # Store the setting in session state so it's accessible across the app
+        st.session_state.rag_return = rag_return
+        
+        # Only show max_whole_files setting when 'whole file' is selected
+        if rag_return == "whole file":
+            max_files = st.number_input(
+                "Max Whole Files",
+                min_value=1,
+                max_value=5,
+                value=2,
+                help="Maximum number of complete files to return"
+            )
+            if 'max_whole_files' not in st.session_state or st.session_state.max_whole_files != max_files:
+                st.session_state.max_whole_files = max_files
+                # Reinitialize bot with new max_whole_files
+                if 'guaxinim_bot' in st.session_state:
+                    del st.session_state['guaxinim_bot']
+        
+        # Add similarity field selection
+        similarity_field = st.selectbox(
+            "Similarity Field",
+            options=["chunks", "summary"],
+            help="Choose which field to use for similarity search"
+        )
+        if 'similarity_field' not in st.session_state or st.session_state.similarity_field != similarity_field:
+            st.session_state.similarity_field = similarity_field
+            # Reinitialize bot when field changes
+            if 'guaxinim_bot' in st.session_state:
+                del st.session_state['guaxinim_bot']
 
 def main():
     """
@@ -263,6 +324,9 @@ def main():
     st.set_page_config(
         page_title="Guaxinim - Coffee Assistant", page_icon=" ", layout="wide"
     )
+    
+    # Initialize settings first
+    initialize_settings()
 
     # Create three columns with the middle one being 600px wide
     left_col, center_col, right_col = st.columns([1, 2, 1])

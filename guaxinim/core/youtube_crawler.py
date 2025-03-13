@@ -111,8 +111,13 @@ class YoutubeCrawler:
             return channel_url.split('@')[-1]
         return 'unknown_channel'
 
-    def process_channel(self, channel_url: str):
-        """Process a YouTube channel's top videos."""
+    def process_channel(self, channel_url: str, interactive: bool = True):
+        """Process a YouTube channel's top videos.
+        
+        Args:
+            channel_url (str): URL or handle of the YouTube channel
+            interactive (bool, optional): If True, prompt for each video. If False, process all videos. Defaults to True.
+        """
         try:
             channel_id = self.get_channel_id(channel_url)
             channel_name = self.get_channel_name(channel_url)
@@ -127,8 +132,12 @@ class YoutubeCrawler:
                 print(f"Views: {video['views']}")
                 print(f"Source: {video['source']}")
                 
-                process = input("Process this video? (y/n): ").lower().strip()
-                if process == 'y':
+                should_process = True
+                if interactive:
+                    process = input("Process this video? (y/n): ").lower().strip()
+                    should_process = process == 'y'
+                
+                if should_process:
                     transcript = self.get_transcript(video['id'])
                     if transcript:
                         # Create filename from video title
@@ -146,3 +155,4 @@ class YoutubeCrawler:
                 
         except Exception as e:
             print(f"Error processing channel: {str(e)}")
+            raise

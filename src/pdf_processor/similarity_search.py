@@ -3,6 +3,7 @@ import numpy as np
 import faiss
 from typing import Dict, List, Tuple
 from sentence_transformers import SentenceTransformer
+from guaxinim.core.logger import logger
 
 class DocumentSearcher:
     def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
@@ -252,6 +253,7 @@ class DocumentSearcher:
                         'title': doc['title'],
                         'source': self._clean_url(doc['source']),
                         'chunk_text': chunk_text,
+                        'full_text': doc.get('full_text', ''),  # Include full text in results
                         'tags': doc.get('tags', []),
                         'similarity_score': 1 - dist/2
                     }
@@ -261,19 +263,22 @@ class DocumentSearcher:
                     result = {
                         'title': title,
                         'source': self._clean_url(doc['source']),
+                        'full_text': doc.get('full_text', ''),  # Include full text in results
                         'tags': doc.get('tags', []),
                         'similarity_score': 1 - dist/2
                     }
-                elif search_type == 'summary':
+                elif search_type == 'summary':                    
                     doc_idx, summary = self.summary_mapping[idx]
                     doc = self.documents[doc_idx]
                     result = {
                         'title': doc['title'],
                         'source': self._clean_url(doc['source']),
                         'summary': summary,
+                        'full_text': doc.get('full_text', ''),  # Include full text in results
                         'tags': doc.get('tags', []),
                         'similarity_score': 1 - dist/2
                     }
+                    logger.info("Summary return with title: {} and distance: {}".format(doc['title'], 1 - dist/2))
                 results.append(result)
         return results
 
