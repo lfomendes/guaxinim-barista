@@ -52,7 +52,13 @@ coverage.xml
 
 # Data files
 data/raw/*
+data/json/*
+data/processed/*
+transcripts/
 !data/raw/.gitkeep
+!data/json/.gitkeep
+!data/processed/.gitkeep
+!transcripts/.gitkeep
 *.cover
 .hypothesis/
 
