@@ -6,6 +6,7 @@ recommendations and answers coffee-related questions using OpenAI's API.
 
 import os
 from openai import OpenAI, APIError, APIConnectionError
+from guaxinim.core.cache import persistent_cache
 from dotenv import load_dotenv
 from typing import List, Dict, Union
 from dataclasses import dataclass
@@ -140,6 +141,7 @@ You are a professional barista with years of experience teaching beginners. Your
             logger.warning(f"Could not initialize document searcher: {e}")
             self.searcher = None
 
+    @persistent_cache(ttl_days=30)
     def get_coffee_guide(self, method: str, rag_return_type: str = "chunks") -> GuaxinimResponse:
         """
         Get a detailed guide for making coffee using the specified method.
@@ -292,6 +294,7 @@ You are a professional barista with years of experience teaching beginners. Your
         # Always return sources even if no context was added
         return "\n".join(context_parts), sources
 
+    @persistent_cache(ttl_days=30)
     def ask_guaxinim(self, query: str, rag_return_type: str = "chunks") -> GuaxinimResponse:
         """
         Process a coffee-related question and return an AI-generated answer along with sources.
@@ -340,6 +343,7 @@ You are a professional barista with years of experience teaching beginners. Your
             logger.error(error_msg)
             return GuaxinimResponse.error(str(e))
 
+    @persistent_cache(ttl_days=30)
     def improve_coffee(self, coffee_data: CoffeePreparationData, rag_return_type: str = "chunks") -> GuaxinimResponse:
         """
         Analyze current coffee preparation parameters and suggest improvements.
