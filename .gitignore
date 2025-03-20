@@ -99,3 +99,4 @@ share/python-wheels/
 *.egg
 MANIFEST
 .streamlit/secrets.toml
+.cache/
