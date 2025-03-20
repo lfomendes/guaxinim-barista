@@ -8,30 +8,43 @@ Guaxinim is an AI-powered coffee assistant that helps you brew the perfect cup o
 - **Coffee Improvement Suggestions**: Input your current coffee parameters and get personalized suggestions
 - **Coffee Knowledge Base**: Ask questions about coffee and get expert answers
 - **Custom Knowledge Sources**: Add your own coffee knowledge through JSON files
+- **Smart Caching**: Redis-based caching system to optimize API usage and response times
 
 ## Adding Custom Knowledge Sources
 
-You can extend Guaxinim's knowledge base by adding your own JSON files before running the application. Here's how:
+Guaxinim can learn from both YouTube videos and PDF documents. Here's how to extend its knowledge base:
 
-1. Create a JSON file with your coffee knowledge in the following format:
+1. You can use the pre-configured YouTube channels list in `config/youtube_channels.json`, which includes popular coffee experts like James Hoffmann and European Coffee Trip. Or create your own channels list:
 ```json
 {
-    "title": "Your Coffee Guide Title",
-    "source": "https://your-source-url.com",
-    "content": "Your detailed coffee knowledge content",
-    "summary": "A brief summary of the content",
-    "tags": ["coffee", "brewing", "guide"]
+    "channels": [
+        "jameshoffmann",
+        "europeancoffeetrip",
+        "LanceHedrick"
+    ]
 }
 ```
 
-2. Place your JSON file in one of these directories:
-   - `data/raw/pdf_processed/`: For processed PDF documents
-   - `data/raw/youtube_processed/`: For processed YouTube transcripts
+2. Place your PDF documents in a directory (e.g., `data/raw/pdf/`)
 
-3. Run the embeddings creation script:
+3. Run the knowledge base initialization script:
 ```bash
-python scripts/create_embeddings.py
+# Using the pre-configured channels list
+python scripts/initialize_knowledge_base.py \
+    --channels-file config/youtube_channels.json \
+    --pdf-dir data/raw/pdf
+
+# Or using your custom channels list
+python scripts/initialize_knowledge_base.py \
+    --channels-file your_channels.json \
+    --pdf-dir data/raw/pdf
 ```
+
+This script will:
+- Crawl and download videos from the specified YouTube channels
+- Process video transcripts into searchable content
+- Convert PDF documents into searchable text
+- Generate embeddings for all processed content
 
 Your knowledge will be available in the next Streamlit session!
 
@@ -78,6 +91,32 @@ The following environment variables are required:
 
 - `OPENAI_API_KEY`: Your OpenAI API key for generating coffee recommendations
 
+## Caching System
+
+Guaxinim uses Redis for persistent caching of API responses to improve performance and reduce API costs:
+
+- **Cache Duration**: Responses are cached for 30 days by default
+- **Cache Control**: Use the 🧹 Clear Cache button in the sidebar to manually clear the cache
+- **Cache Keys**: Responses are cached based on:
+  - Function name
+  - Input parameters
+  - Similarity search settings
+  - Bot configuration
+
+### Redis Setup
+
+1. Install Redis:
+```bash
+sudo apt-get install redis-server
+```
+
+2. Verify Redis is running:
+```bash
+systemctl status redis-server
+```
+
+3. Redis configuration is automatically handled by the application
+
 To set up your environment:
 1. Copy `env.example` to `.env`
 2. Replace the placeholder values with your actual API keys
@@ -98,25 +137,22 @@ Run the quality checks:
 
 ## Utility Scripts
 
-Guaxinim comes with several utility scripts to help you process different types of content:
+Guaxinim provides a main script to initialize and update its knowledge base:
 
-### PDF Processing
+### Knowledge Base Initialization
 ```bash
-# Process PDF files from data/raw/pdf directory
-python scripts/process_pdfs.py
+# Initialize or update the knowledge base
+python scripts/initialize_knowledge_base.py \
+    --channels-file channels.json \
+    --pdf-dir data/raw/pdf
 ```
-This script converts PDF files into JSON format with extracted text, summaries, and metadata.
 
-### YouTube Content
-```bash
-# Crawl videos from any YouTube channel
-python scripts/crawl_youtube_videos.py "https://www.youtube.com/@channelname"
+This script automates the entire process of:
+1. Downloading and processing YouTube videos
+2. Converting PDFs into searchable text
+3. Creating embeddings for all content
 
-# Process downloaded video transcripts
-python scripts/process_transcripts.py
-```
-These scripts help you download and process YouTube video transcripts as knowledge sources. The crawler script requires a YouTube API key to be set in your `.env` file:
-
+The script requires a YouTube API key to be set in your `.env` file:
 ```
 YOUTUBE_API_KEY=your_api_key_here
 ```
@@ -128,12 +164,16 @@ To get a YouTube API key:
 4. Create credentials (API key)
 5. Copy the API key and paste it in your `.env` file
 
-### Embeddings Creation
-```bash
-# Create embeddings for all processed documents
-python scripts/create_embeddings.py
+### Directory Structure
 ```
-Run this script after adding new content to update the search index.
+data/
+├── raw/
+│   ├── pdf/            # Place your PDF files here
+│   ├── transcripts/     # YouTube transcripts (auto-generated)
+│   ├── pdf_processed/   # Processed PDF content
+│   └── youtube_processed/ # Processed YouTube content
+└── embeddings/         # Generated embeddings
+```
 
 ## Contributing
 

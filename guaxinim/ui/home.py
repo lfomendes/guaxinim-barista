@@ -10,6 +10,7 @@ The app provides three main functionalities:
 import streamlit as st
 from guaxinim.core.coffee_data import CoffeePreparationData
 from guaxinim.core.bot_manager import get_bot
+from guaxinim.core.cache import clear_cache
 from guaxinim.ui.similarity_search_page import search_coffee_documents
 
 # Define brewing methods globally
@@ -278,6 +279,15 @@ def learn_about_coffee():
 def initialize_settings():
     """Initialize application settings in the sidebar"""
     with st.sidebar:
+        # Add cache control section
+        st.subheader("Cache Control")
+        if st.button("🧹 Clear Cache", help="Clear all cached responses"):
+            try:
+                clear_cache()
+                st.success("Cache cleared successfully!")
+            except Exception as e:
+                st.error(f"Error clearing cache: {e}")
+        st.markdown("---")
         st.subheader("Search Settings")
         rag_return = st.selectbox(
             "RAG return",
